@@ -8,21 +8,11 @@ services:
       - CSS_CONFIG=/config/config-penny.json
       - CSS_ROOT_FILE_PATH=/data
     ports:
-      - '3000:3000'
+      - "3000:3000"
 
-  issuer:
-    build: ./issuer
-    container_name: issuer
+  did-generator:
+    build: ./did-generator
+    container_name: did-generator
+    command: npm run app
     ports:
-      - '4321:4321'
-
-  verifier:
-    build: ./verifier
-    container_name: verifier
-    ports:
-      - '8080:8080'
-
-  keygen:
-    build: ./keygen
-    container_name: keygen
-    command: npm run keys
+      - "3001:3001"
