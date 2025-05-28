@@ -1,5 +1,6 @@
 import express from "express";
 import crypto from "crypto";
+import { exportJWK } from "jose";
 import { importSPKI, importPKCS8 } from "jose/key/import";
 import fetch from "node-fetch";
 import { readFile } from "fs/promises";
@@ -12,8 +13,7 @@ app.use(express.json());
 
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
-const TOKEN_URL =
-  "https://idserver-stage.rubricae.com/realms/rubricae/protocol/openid-connect/token";
+const TOKEN_URL = process.env.TOKEN_URL;
 const SIGN_API_URL = process.env.SIGN_API_URL;
 const SOLID_ENDPOINT = "http://solid:3000/my-pod/VerifiableCredentials/";
 
@@ -25,7 +25,7 @@ app.post("/generate-did", async (req, res) => {
     // 1. Generar claves y DID
     const { privateKey, publicKey } = await generateRsaKeyPair();
     const did = generateDidWeb(domain, path);
-    const publicJwk = await exportJwk(publicKey);
+    const publicJwk = await exportJWK(publicKey);
     const didDocument = generateDidDocument(did, publicJwk);
 
     // 2. Subir a Solid el DID Document
@@ -98,17 +98,10 @@ app.post("/generate-did", async (req, res) => {
     }
 
     // 7. Obtener PDF firmado en base64
-    const signedResult = await signResponse.json();
-    const signedPdfBase64 = signedResult.signedPdfBase64;
-    if (!signedPdfBase64) {
-      return res
-        .status(500)
-        .json({ error: "No signed PDF returned from signing API" });
-    }
-    const signedPdfBuffer = Buffer.from(signedPdfBase64, "base64");
+    const signedPdfBuffer = await signResponse.arrayBuffer();
+    const signedPdfSlug = `signed-dummy-${path.replace(/\//g, "-")}.pdf`;
 
     // 8. Subir PDF firmado a Solid
-    const signedPdfSlug = `signed-dummy-${path.replace(/\//g, "-")}.pdf`;
     const signedUploadResponse = await fetch(SOLID_ENDPOINT, {
       method: "POST",
       headers: {
@@ -130,7 +123,6 @@ app.post("/generate-did", async (req, res) => {
       uploadedDidDocumentUrl:
         solidResponse.headers.get("Location") || "unknown",
       signedPdfUrl: signedUploadResponse.headers.get("Location") || "unknown",
-      signedPdfBase64,
     });
   } catch (err) {
     console.error(err);
