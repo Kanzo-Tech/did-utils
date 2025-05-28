@@ -4,7 +4,7 @@ services:
     container_name: solid
     environment:
       - CSS_LOGGING_LEVEL=debug
-      - CSS_BASE_URL=http://solid:3000/
+      - CSS_BASE_URL=${SOLID_URL}
       - CSS_CONFIG=/config/config-penny.json
       - CSS_ROOT_FILE_PATH=/data
     ports:
@@ -12,6 +12,8 @@ services:
 
   did-generator:
     build: ./did-generator
+    env_file:
+      - .env
     container_name: did-generator
     command: npm run app
     ports:

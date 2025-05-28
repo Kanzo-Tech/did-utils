@@ -24,7 +24,7 @@ Before running the services, make sure you have the following installed:
    ```sh
    curl -X POST http://localhost:3001/generate-did \
      -H "Content-Type: application/json" \
-     -d '{"domain": "example.com","path": "user/alice", "name": "Alice", "email": "alice@example.com", "dni": "123456789"}'
+     -d '{"domain": "example.com", "name": "Alice", "email": "alice@example.com", "dni": "123456789"}'
    ```
 5. Access the services at the following URLs:
    - Generated DID location: http://solid:3000/my-pod/VerifiableCredentials/did-web-user-alice

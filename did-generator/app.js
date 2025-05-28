@@ -15,12 +15,17 @@ const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
 const TOKEN_URL = process.env.TOKEN_URL;
 const SIGN_API_URL = process.env.SIGN_API_URL;
-const SOLID_ENDPOINT = process.env.SOLID_URL;
+const SOLID_ENDPOINT = `${process.env.SOLID_URL}my-pod/VerifiableCredentials/`;
 
+// Esto espera:
+// - domain: ej. example.com
+// - name: ej. alice
+// - email: ej. alice@example.com
+// - dni: ej. 123456789
 app.post("/generate-did", async (req, res) => {
   try {
     const domain = req.body.domain || "example.com";
-    const path = req.body.path || "user/alice";
+    const path = `user/${req.body.name}` || "user/alice";
 
     // 1. Generar claves y DID
     const { privateKey, publicKey } = await generateRsaKeyPair();
