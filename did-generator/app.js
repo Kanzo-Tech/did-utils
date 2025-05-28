@@ -1,26 +1,35 @@
 import express from "express";
 import crypto from "crypto";
-import { importJWK, exportJWK } from "jose";
 import { importSPKI, importPKCS8 } from "jose/key/import";
 import fetch from "node-fetch";
+import { readFile } from "fs/promises";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const app = express();
 app.use(express.json());
+
+const CLIENT_ID = process.env.CLIENT_ID;
+const CLIENT_SECRET = process.env.CLIENT_SECRET;
+const TOKEN_URL =
+  "https://idserver-stage.rubricae.com/realms/rubricae/protocol/openid-connect/token";
+const SIGN_API_URL = process.env.SIGN_API_URL;
+const SOLID_ENDPOINT = "http://solid:3000/my-pod/VerifiableCredentials/";
 
 app.post("/generate-did", async (req, res) => {
   try {
     const domain = req.body.domain || "example.com";
     const path = req.body.path || "user/alice";
 
+    // 1. Generar claves y DID
     const { privateKey, publicKey } = await generateRsaKeyPair();
     const did = generateDidWeb(domain, path);
-
-    const publicJwk = await exportJWK(publicKey);
-
+    const publicJwk = await exportJwk(publicKey);
     const didDocument = generateDidDocument(did, publicJwk);
 
+    // 2. Subir a Solid el DID Document
     const solidResponse = await uploadToSolid(didDocument, path);
-
     if (!solidResponse.ok) {
       const errorText = await solidResponse.text();
       return res
@@ -28,18 +37,111 @@ app.post("/generate-did", async (req, res) => {
         .json({ error: "Upload to Solid failed", details: errorText });
     }
 
+    // 3. Leer PDF dummy local
+    const pdfBuffer = await readFile("dummy.pdf");
+    const pdfBase64 = pdfBuffer.toString("base64");
+
+    // 4. Obtener token OAuth2
+    const tokenResponse = await fetch(TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,
+        grant_type: "client_credentials",
+        scope: "openid",
+      }),
+    });
+    if (!tokenResponse.ok) {
+      const errorText = await tokenResponse.text();
+      return res
+        .status(500)
+        .json({ error: "Failed to get auth token", details: errorText });
+    }
+    const { access_token: accessToken } = await tokenResponse.json();
+
+    // 5. Preparar payload para firma
+    const hash = crypto.createHash("sha1").update(pdfBuffer).digest("hex");
+    const signPayload = {
+      file: {
+        content: pdfBase64,
+        name: "dummy.pdf",
+        type: "application/pdf",
+        hash,
+      },
+      signers: [
+        {
+          profile: {
+            dni: "48948948-E",
+            email: "prueba@rubricae.es",
+            name: "Prueba Demo",
+          },
+          sendEmailSignedDoc: false,
+        },
+      ],
+    };
+
+    // 6. Llamar API de firma
+    const signResponse = await fetch(SIGN_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(signPayload),
+    });
+    if (!signResponse.ok) {
+      const errorText = await signResponse.text();
+      return res
+        .status(signResponse.status)
+        .json({ error: "Signing failed", details: errorText });
+    }
+
+    // 7. Obtener PDF firmado en base64
+    const signedResult = await signResponse.json();
+    const signedPdfBase64 = signedResult.signedPdfBase64;
+    if (!signedPdfBase64) {
+      return res
+        .status(500)
+        .json({ error: "No signed PDF returned from signing API" });
+    }
+    const signedPdfBuffer = Buffer.from(signedPdfBase64, "base64");
+
+    // 8. Subir PDF firmado a Solid
+    const signedPdfSlug = `signed-dummy-${path.replace(/\//g, "-")}.pdf`;
+    const signedUploadResponse = await fetch(SOLID_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/pdf",
+        Slug: signedPdfSlug,
+      },
+      body: signedPdfBuffer,
+    });
+    if (!signedUploadResponse.ok) {
+      const errorText = await signedUploadResponse.text();
+      return res
+        .status(signedUploadResponse.status)
+        .json({ error: "Uploading signed PDF failed", details: errorText });
+    }
+
+    // 9. Responder con toda la info
     res.json({
       did,
-      uploadedTo: solidResponse.headers.get("Location") || "unknown",
+      uploadedDidDocumentUrl:
+        solidResponse.headers.get("Location") || "unknown",
+      signedPdfUrl: signedUploadResponse.headers.get("Location") || "unknown",
+      signedPdfBase64,
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Failed to generate and upload DID" });
+    res
+      .status(500)
+      .json({ error: "Failed to generate, upload DID and sign/upload PDF" });
   }
 });
 
 async function generateRsaKeyPair() {
-  return new Promise((resolve, reject) => {
+  return await new Promise((resolve, reject) => {
     crypto.generateKeyPair(
       "rsa",
       {
@@ -49,27 +151,17 @@ async function generateRsaKeyPair() {
       },
       async (err, pubPem, privPem) => {
         if (err) return reject(err);
-        try {
-          const publicKey = await importSPKI(pubPem, "RS256");
-          const privateKey = await importPKCS8(privPem, "RS256");
-          resolve({ publicKey, privateKey });
-        } catch (e) {
-          reject(e);
-        }
+        const publicKey = await importSPKI(pubPem, "RS256");
+        const privateKey = await importPKCS8(privPem, "RS256");
+        resolve({ publicKey, privateKey });
       },
     );
   });
 }
 
 function generateDidWeb(domain, path = "") {
-  const sanitizedDomain = domain.toLowerCase();
-  const sanitizedPath = path
-    .split("/")
-    .map((part) => part.toLowerCase())
-    .join(":");
-  return sanitizedPath
-    ? `did:web:${sanitizedDomain}:${sanitizedPath}`
-    : `did:web:${sanitizedDomain}`;
+  const webId = path ? `${domain}:${path.replaceAll("/", ":")}` : domain;
+  return `did:web:${webId}`;
 }
 
 function generateDidDocument(did, publicJwk) {
@@ -91,15 +183,13 @@ function generateDidDocument(did, publicJwk) {
 }
 
 async function uploadToSolid(didDocument, path) {
-  const solidEndpoint = "http://solid:3000/my-pod/VerifiableCredentials/";
-
   const slug = `did-web-${path.replace(/\//g, "-")}`;
 
-  const response = await fetch(solidEndpoint, {
+  const response = await fetch(SOLID_ENDPOINT, {
     method: "POST",
     body: JSON.stringify(didDocument, null, 2),
     headers: {
-      "Content-Type": "application/json",
+      "Content-type": "text/plain",
       Slug: slug,
     },
   });
@@ -108,4 +198,4 @@ async function uploadToSolid(didDocument, path) {
 }
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`DID generator running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
