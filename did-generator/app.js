@@ -15,7 +15,7 @@ const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
 const TOKEN_URL = process.env.TOKEN_URL;
 const SIGN_API_URL = process.env.SIGN_API_URL;
-const SOLID_ENDPOINT = "http://solid:3000/my-pod/VerifiableCredentials/";
+const SOLID_ENDPOINT = process.env.SOLID_URL;
 
 app.post("/generate-did", async (req, res) => {
   try {
@@ -72,9 +72,9 @@ app.post("/generate-did", async (req, res) => {
       signers: [
         {
           profile: {
-            dni: "48948948-E",
-            email: "prueba@rubricae.es",
-            name: "Prueba Demo",
+            dni: req.body.dni || "48948948-E",
+            email: req.body.email || "prueba@rubricae.es",
+            name: req.body.name || did,
           },
           sendEmailSignedDoc: false,
         },
