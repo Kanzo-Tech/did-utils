@@ -1,0 +1,28 @@
+services:
+  solid:
+    build: ./solid-server
+    container_name: solid
+    environment:
+      - CSS_LOGGING_LEVEL=debug
+      - CSS_BASE_URL=http://solid:3000/
+      - CSS_CONFIG=/config/config-penny.json
+      - CSS_ROOT_FILE_PATH=/data
+    ports:
+      - '3000:3000'
+
+  issuer:
+    build: ./issuer
+    container_name: issuer
+    ports:
+      - '4321:4321'
+
+  verifier:
+    build: ./verifier
+    container_name: verifier
+    ports:
+      - '8080:8080'
+
+  keygen:
+    build: ./keygen
+    container_name: keygen
+    command: npm run keys
