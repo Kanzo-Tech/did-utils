@@ -10,7 +10,7 @@ Before running the services, make sure you have the following installed:
 
 1. Clone the repository
    ```
-   git clone https://github.com/Kanzo-Tech/ssi-utils.git
+   git clone https://github.com/Kanzo-Tech/did-utils.git
    ```
 2. Modify the `etc/hosts` file to add the following line:
    ```
