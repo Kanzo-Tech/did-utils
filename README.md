@@ -10,7 +10,7 @@ Before running the services, make sure you have the following installed:
 
 1. Clone the repository
    ```
-   git clone https://github.com/Kanzo-Tech/ssi-utils.git
+   git clone https://github.com/Kanzo-Tech/did-utils.git
    ```
 2. Modify the `etc/hosts` file to add the following line:
    ```
@@ -24,7 +24,7 @@ Before running the services, make sure you have the following installed:
    ```sh
    curl -X POST http://localhost:3001/generate-did \
      -H "Content-Type: application/json" \
-     -d '{"domain": "example.com", "name": "Alice", "email": "alice@example.com", "dni": "123456789"}'
+     -d '{"domain": "example.com", "name": "alice", "email": "alice@example.com", "dni": "123456789"}'
    ```
 5. Access the services at the following URLs:
    - Generated DID location: http://solid:3000/my-pod/VerifiableCredentials/did-web-user-alice
