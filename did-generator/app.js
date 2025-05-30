@@ -15,7 +15,7 @@ const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
 const TOKEN_URL = process.env.TOKEN_URL;
 const SIGN_API_URL = process.env.SIGN_API_URL;
-const SOLID_ENDPOINT = `${process.env.SOLID_URL}my-pod/VerifiableCredentials/`;
+const SOLID_ENDPOINT = `${process.env.SOLID_URL}/my-pod/VerifiableCredentials/`;
 
 // Esto espera:
 // - domain: ej. example.com
